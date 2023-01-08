@@ -1,4 +1,4 @@
-import { Games, GAMES_KEYS_LIST } from ':constants/games';
+import { GameSlugs, GAMES_KEYS_LIST } from ':constants/games';
 import { GamePageProps } from ':page-components/game-page';
 import {
   GetStaticPathsResult,
@@ -23,7 +23,7 @@ export function getStaticProps(
   context: GetStaticPropsContext
 ): GetStaticPropsResult<GamePageProps> {
   const { slug } = context.params || {};
-  const gameSlug: Games = slug as Games;
+  const gameSlug: GameSlugs = slug as GameSlugs;
 
   return {
     props: {
