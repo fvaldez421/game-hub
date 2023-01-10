@@ -1,13 +1,12 @@
 import { Server } from 'socket.io';
 import { GameSlugs } from ':constants/games';
-import { BaseRoom } from './base-room';
-import { Player } from ':types/game-types';
+import { BaseGame } from './base-game';
 
 /**
  * Never use this class directly. Instead use the `roomManager` export
  */
 export class RoomManager {
-  private rooms: Record<string, BaseRoom>;
+  private rooms: Record<string, BaseGame>;
   constructor() {
     this.rooms = {};
   }
@@ -15,7 +14,7 @@ export class RoomManager {
     return Object.values(this.rooms);
   }
 
-  public addRoom(room: BaseRoom) {
+  public addRoom(room: BaseGame) {
     this.rooms[room.roomId] = room;
   }
 
@@ -23,14 +22,14 @@ export class RoomManager {
     io: Server,
     roomId: string,
     gameSlug: GameSlugs
-  ): BaseRoom {
+  ): BaseGame {
     // this will be replaced by a mapping of game rooms using gameSlug
-    const room = new BaseRoom(io, roomId, gameSlug);
+    const room = new BaseGame(io, roomId, gameSlug);
     this.rooms[roomId] = room;
     return room;
   }
 
-  private getRoom(roomId: string): BaseRoom {
+  private getRoom(roomId: string): BaseGame {
     const foundRoom = this.rooms[roomId];
     return foundRoom || null;
   }
@@ -39,7 +38,7 @@ export class RoomManager {
     io: Server,
     roomId: string,
     gameSlug: GameSlugs
-  ): BaseRoom {
+  ): BaseGame {
     const foundRoom = this.getRoom(roomId);
     if (foundRoom) return foundRoom;
     console.log(

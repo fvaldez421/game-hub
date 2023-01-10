@@ -3,7 +3,7 @@ import { Socket } from 'socket.io-client';
 import { GameSocketPayload, Player } from ':types/game-types';
 import { GameSlugs } from ':constants/games';
 import { CommonGameEvents } from ':constants/game-events';
-import { makeSocketPayload } from ':utils/socket-utils';
+import { combineSocketHandlers, makeSocketPayload } from ':utils/socket-utils';
 import { useQueryRoomId } from './use-query-room-id';
 import { SocketEventHandlers, useSocket } from './use-socket';
 
@@ -17,7 +17,7 @@ export type GameSocket = {
 
 export const useGameSocket = (
   gameSlug: GameSlugs,
-  eventsConfig: SocketEventHandlers,
+  handlers: SocketEventHandlers,
   player: Player
 ): GameSocket => {
   const roomId = useQueryRoomId();
@@ -27,25 +27,31 @@ export const useGameSocket = (
 
   const onRoomPlayerJoined = ({ data }: GameSocketPayload) => {
     setPlayers(data.players);
-    console.log(`Room player joined: ${data.player?.username}`);
   };
 
   const onRoomHostAssigned = ({ data }: GameSocketPayload) => {
     setHost(data.host);
-    console.log(`Room host assigned: ${data.player?.username}`);
   };
 
   const onRoomMetadataUpdate = ({ data }: GameSocketPayload) => {
     setHost(data.host);
     setPlayers(data.players);
-    console.log(`Room metadata update:`, data);
   };
 
   const gameEventsConfig = {
-    ...eventsConfig,
-    [CommonGameEvents.RoomMetadataUpdate]: onRoomMetadataUpdate,
-    [CommonGameEvents.RoomHostAssigned]: onRoomHostAssigned,
-    [CommonGameEvents.RoomPlayerJoined]: onRoomPlayerJoined,
+    ...handlers,
+    [CommonGameEvents.RoomMetadataUpdate]: combineSocketHandlers(
+      onRoomMetadataUpdate,
+      handlers[CommonGameEvents.RoomMetadataUpdate]
+    ),
+    [CommonGameEvents.RoomHostAssigned]: combineSocketHandlers(
+      onRoomHostAssigned,
+      handlers[CommonGameEvents.RoomHostAssigned]
+    ),
+    [CommonGameEvents.RoomPlayerJoined]: combineSocketHandlers(
+      onRoomPlayerJoined,
+      handlers[CommonGameEvents.RoomPlayerJoined]
+    ),
   };
 
   const { socket, connected } = useSocket(gameEventsConfig);

@@ -1,15 +1,9 @@
-import Head from 'next/head';
+import { PageMeta } from ':components/page-meta';
 
 export const HomePage = () => {
   return (
     <>
-      <Head>
-        <title>Game Hub</title>
-        <meta
-          name="description"
-          content="Game Hub - a next-gen gaming platform."
-        />
-      </Head>
+      <PageMeta />
       <main>
         <h1>Game Hub</h1>
       </main>

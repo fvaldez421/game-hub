@@ -4,6 +4,7 @@ export type Player = {
 };
 
 export type RoomPlayer = {
+  socketId: string;
   joinedTS: number;
 } & Player;
 

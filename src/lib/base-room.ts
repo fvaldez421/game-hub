@@ -3,55 +3,57 @@ import { GameSocketPayload, Player, RoomPlayer } from ':types/game-types';
 import { CommonGameEvents } from ':constants/game-events';
 import { makeSocketPayload } from ':utils/socket-utils';
 import { getTimeStamp } from ':utils/time-utils';
-import { GameSlugs } from ':constants/games';
 
 export class BaseRoom {
   private id: string;
 
   private io: Server;
 
-  private capacity: number;
-
-  private gameSlug: GameSlugs;
+  protected capacity: number;
 
   private host: Player | null;
 
-  private players: Record<string, RoomPlayer>;
+  protected playersMap: Record<string, RoomPlayer>;
 
-  private sockets: Socket[];
+  private sockets: Record<string, Socket>;
 
-  constructor(io: Server, roomId: string, gameSlug: GameSlugs) {
+  protected socketHandlers: Record<string, (...args: any[]) => void>;
+
+  constructor(io: Server, roomId: string) {
     this.io = io;
     this.id = roomId;
-    this.gameSlug = gameSlug;
     this.host = null;
-    this.capacity = 2;
-    this.players = {};
-    this.sockets = [];
+    this.capacity = 8;
+    this.playersMap = {};
+    this.sockets = {};
+    this.socketHandlers = {};
   }
 
   public get roomId() {
     return this.id;
   }
 
-  public get allPlayers() {
-    return Object.values(this.players);
+  public get players() {
+    return Object.values(this.playersMap);
   }
 
   public get isEmpty() {
-    return this.allPlayers.length === 0;
+    return this.players.length === 0;
   }
 
-  public get evalShouldAddPlayer() {
+  public get isFull() {
+    return this.players.length === this.capacity;
+  }
+
+  protected get evalShouldAddPlayer() {
     let result = true;
     let reason = '';
 
     // max cap reached validation
-    if (this.allPlayers.length >= this.capacity) {
+    if (this.players.length >= this.capacity) {
       result = false;
       reason = 'Room capacity reached.';
     }
-    // add other validations here
 
     return {
       result,
@@ -59,7 +61,15 @@ export class BaseRoom {
     };
   }
 
-  private emitRoomEvent(gameEvent: string, data: any) {
+  private makeRoomPlayer(player: Player, socketId: string): RoomPlayer {
+    return {
+      ...player,
+      joinedTS: getTimeStamp(),
+      socketId,
+    };
+  }
+
+  protected emitRoomEvent(gameEvent: string, data: any) {
     const payload: GameSocketPayload = makeSocketPayload(data);
     this.io.sockets.in(this.roomId).emit(gameEvent, payload);
   }
@@ -67,7 +77,7 @@ export class BaseRoom {
   private emitPlayerJoined(player: RoomPlayer) {
     const data = {
       player,
-      players: this.allPlayers,
+      players: this.players,
     };
     this.emitRoomEvent(CommonGameEvents.RoomPlayerJoined, data);
   }
@@ -77,13 +87,51 @@ export class BaseRoom {
     this.emitRoomEvent(CommonGameEvents.RoomHostAssigned, data);
   }
 
+  private emitPlayerLeft(player: RoomPlayer) {
+    const data = { player };
+    this.emitRoomEvent(CommonGameEvents.RoomPlayerLeft, data);
+  }
+
+  private handlePlayerLeft(player: RoomPlayer) {
+    delete this.playersMap[player.id];
+    this.emitPlayerLeft(player);
+  }
+
+  private removeSocket(socketId: string) {
+    delete this.sockets[socketId];
+  }
+
+  private findPlayerBySocketId(socketId: string): RoomPlayer | null {
+    return this.players.find((player) => player.socketId === socketId) || null;
+  }
+
+  private handleSocketDisconnected(socketId: string) {
+    console.log(`Socket ${socketId} disconnnected.`);
+
+    const socketPlayer = this.findPlayerBySocketId(socketId);
+
+    if (!socketPlayer) {
+      console.log('could not find socket player to remove');
+      return;
+    }
+
+    console.log(
+      `Player: "${socketPlayer.username}" disconnected. Removing player from room ${this.id}`
+    );
+
+    this.handlePlayerLeft(socketPlayer);
+    this.removeSocket(socketId);
+  }
+
   private addSocketHandlers(socket: Socket) {
     // subscribes socket to room events
     socket.join(this.roomId);
 
     // list common room events here
-    socket.on('disconnect', () => {
-      console.log('socket disconnected');
+    socket.on('disconnect', () => this.handleSocketDisconnected(socket.id));
+    // this allows us to set handlers from child classes
+    Object.entries(this.socketHandlers).forEach(([eventKey, handler]) => {
+      socket.on(eventKey, handler);
     });
   }
 
@@ -92,28 +140,31 @@ export class BaseRoom {
     this.emitHostAssigned(player);
   }
 
-  private addPlayerToRoom(player: Player) {
-    const roomPlayer = { ...player, joinedTS: getTimeStamp() };
+  private addPlayerToRoom(player: Player, socketId: string) {
+    console.log(`Adding player: "${player.username}" to room: "${this.id}".`);
+    const roomPlayer = this.makeRoomPlayer(player, socketId);
     const wasEmpty = this.isEmpty;
 
-    this.players[player.id] = roomPlayer;
+    // add player to players - will make this.isEmpty false
+    this.playersMap[player.id] = roomPlayer;
     this.emitPlayerJoined(roomPlayer);
+
     // if room was empty prior to current player joining
     if (wasEmpty) {
       this.handleHostAssigned(roomPlayer);
     }
+    this.onPlayerJoined(roomPlayer);
   }
 
   private addSocketToRoom(socket: Socket) {
     this.addSocketHandlers(socket);
-    this.sockets.push(socket);
+    this.sockets[socket.id] = socket;
   }
 
   private emitRoomMetaToUser(socket: Socket) {
     const payload: GameSocketPayload = makeSocketPayload({
       host: this.host,
-      players: this.allPlayers,
-      gameSlug: this.gameSlug,
+      players: this.players,
     });
     socket.emit(CommonGameEvents.RoomMetadataUpdate, payload);
   }
@@ -129,11 +180,13 @@ export class BaseRoom {
     const shouldAllowPlayerToJoin = this.evalShouldAddPlayer;
     // if room can add player, add them and subscribe their socket
     if (shouldAllowPlayerToJoin.result) {
-      this.addPlayerToRoom(player);
       this.addSocketToRoom(socket);
+      this.addPlayerToRoom(player, socket.id);
       this.emitRoomMetaToUser(socket);
       return;
     }
     this.emitFailedToJoinRoomToUser(socket, shouldAllowPlayerToJoin.reason);
   }
+  // utilities for child classes
+  protected onPlayerJoined(player: RoomPlayer) {}
 }
