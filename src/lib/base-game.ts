@@ -1,51 +1,10 @@
 import { Server } from 'socket.io';
-import { v4 as uuidV4 } from 'uuid';
 import { GameSlugs } from ':constants/games';
 import { BaseRoom } from './base-room';
 import { RoomPlayer } from ':types/game-types';
 import { getGameMetaData } from ':utils/games-utils';
 import { CommonGameEvents } from ':constants/game-events';
-
-class PlayerTeam {
-  public id: string;
-
-  private capacity: number;
-
-  public name: string;
-
-  private playersMap: Record<string, RoomPlayer>;
-
-  constructor(capacity: number, existingTeamsCount: number, name?: string) {
-    this.id = uuidV4();
-    this.capacity = capacity;
-    this.name = name || PlayerTeam.getFallbackTeamName(existingTeamsCount);
-    this.playersMap = {};
-  }
-
-  static getFallbackTeamName(existingTeamsCount: number) {
-    const teamNumber = existingTeamsCount + 1;
-    return `Unnamed team ${teamNumber} `;
-  }
-
-  get players() {
-    return Object.values(this.playersMap);
-  }
-
-  get totalPlayers() {
-    return Object.keys(this.playersMap).length;
-  }
-
-  get isFull() {
-    return this.players.length === this.capacity;
-  }
-
-  addPlayer(player: RoomPlayer) {
-    if (this.isFull) return false;
-
-    this.playersMap[player.id] = player;
-    return true;
-  }
-}
+import { PlayerTeam } from './player-team';
 
 export enum GlobalGameState {
   Default = 'default',
@@ -56,6 +15,8 @@ export enum GlobalGameState {
 }
 
 export class BaseGame extends BaseRoom {
+  protected gameSlug: string;
+
   protected capacity: number;
 
   private maxTeams: number;
@@ -72,17 +33,19 @@ export class BaseGame extends BaseRoom {
 
   private showTeamNames: boolean = false;
 
-  protected socketHandlers: Record<string, (...args: any[]) => void>;
-
   protected globalGameState: GlobalGameState;
+
+  protected shouldAutoStartOnFull: boolean;
 
   constructor(io: Server, roomId: string, gameSlug: GameSlugs) {
     super(io, roomId);
     const gameConfig = getGameMetaData(gameSlug);
+    this.gameSlug = gameSlug;
     this.maxTeamPlayers = gameConfig.maxTeamPlayers;
     this.maxTeams = gameConfig.maxPlayerTeams;
     this.capacity = gameConfig.maxTotalPlayers;
     this.showTeamNames = gameConfig.showTeamNames;
+    this.shouldAutoStartOnFull = gameConfig.shouldAutoStartOnFull;
 
     // we have to init with default teams. There's ALWAYS at least one team...
     this.playerTeams = [];
@@ -91,11 +54,6 @@ export class BaseGame extends BaseRoom {
     this.turnTeam = initialTeams[0];
     this.teamsTurnOrder = initialTeams.map((team) => team.id);
     this.turnTeamIndex = 0;
-
-    this.socketHandlers = {
-      // handle things
-    };
-
     this.globalGameState = GlobalGameState.Default;
     this.emitGameStateUpdate();
     this.emitTeamsUpdate();
@@ -132,6 +90,15 @@ export class BaseGame extends BaseRoom {
 
   private isGameInGivenState(state: GlobalGameState) {
     return this.globalGameState === state;
+  }
+
+  protected set socketHandlers(
+    handlers: Record<string, (...args: any[]) => void>
+  ) {
+    this._socketHandlers = {
+      ...this._socketHandlers,
+      ...handlers,
+    };
   }
 
   protected resetGame() {
@@ -224,20 +191,25 @@ export class BaseGame extends BaseRoom {
     return this.addNewPlayerTeam();
   }
 
+  protected emitGameEvent(gameEvent: string, data: any) {
+    return this.emitRoomEvent(gameEvent, data, { gameSlug: this.gameSlug });
+  }
+
   private emitTeamsUpdate() {
-    this.emitRoomEvent(CommonGameEvents.RoomTeamsUpdated, {
+    this.emitGameEvent(CommonGameEvents.RoomTeamsUpdated, {
       teams: this.playerTeams,
+      showTeamNames: this.showTeamNames,
     });
   }
 
   private emitTurnTeamUpdate() {
-    this.emitRoomEvent(CommonGameEvents.RoomTurnTeamUpdate, {
+    this.emitGameEvent(CommonGameEvents.RoomTurnTeamUpdate, {
       turnTeam: { ...this.turnTeam, players: this.turnTeam.players },
     });
   }
 
   protected emitGameStateUpdate() {
-    this.emitRoomEvent(CommonGameEvents.RoomGameStateUpdate, {
+    this.emitGameEvent(CommonGameEvents.RoomGameStateUpdate, {
       gameState: this.globalGameState,
     });
   }
@@ -250,6 +222,10 @@ export class BaseGame extends BaseRoom {
     this.emitTurnTeamUpdate();
 
     if (this.isFull) {
+      this.onGameFull();
+    }
+
+    if (this.isFull && this.shouldAutoStartOnFull) {
       console.log(`Game room is full, starting game.`);
       this.startGame();
     }
@@ -287,4 +263,5 @@ export class BaseGame extends BaseRoom {
   protected onGamePause() {}
   protected onGameComplete() {}
   protected onGameReset() {}
+  protected onGameFull() {}
 }

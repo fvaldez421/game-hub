@@ -2,10 +2,14 @@ import { GameSocketPayload } from ':types/game-types';
 import { getTimeStamp } from './time-utils';
 import { isNonEmptyArray } from './validators';
 
-export const makeSocketPayload = (data: any): GameSocketPayload => {
+export const makeSocketPayload = (
+  data: any,
+  metadata: Record<string, any> = {}
+): GameSocketPayload => {
   return {
     sentTs: getTimeStamp(),
     data,
+    ...metadata,
   };
 };
 

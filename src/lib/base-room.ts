@@ -17,7 +17,7 @@ export class BaseRoom {
 
   private sockets: Record<string, Socket>;
 
-  protected socketHandlers: Record<string, (...args: any[]) => void>;
+  protected _socketHandlers: Record<string, (...args: any[]) => void>;
 
   constructor(io: Server, roomId: string) {
     this.io = io;
@@ -26,7 +26,7 @@ export class BaseRoom {
     this.capacity = 8;
     this.playersMap = {};
     this.sockets = {};
-    this.socketHandlers = {};
+    this._socketHandlers = {};
   }
 
   public get roomId() {
@@ -69,8 +69,12 @@ export class BaseRoom {
     };
   }
 
-  protected emitRoomEvent(gameEvent: string, data: any) {
-    const payload: GameSocketPayload = makeSocketPayload(data);
+  protected emitRoomEvent(
+    gameEvent: string,
+    data: any,
+    metadata?: Record<string, any>
+  ) {
+    const payload: GameSocketPayload = makeSocketPayload(data, metadata);
     this.io.sockets.in(this.roomId).emit(gameEvent, payload);
   }
 
@@ -130,7 +134,7 @@ export class BaseRoom {
     // list common room events here
     socket.on('disconnect', () => this.handleSocketDisconnected(socket.id));
     // this allows us to set handlers from child classes
-    Object.entries(this.socketHandlers).forEach(([eventKey, handler]) => {
+    Object.entries(this._socketHandlers).forEach(([eventKey, handler]) => {
       socket.on(eventKey, handler);
     });
   }

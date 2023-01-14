@@ -6,6 +6,7 @@ import { CommonGameEvents } from ':constants/game-events';
 import { combineSocketHandlers, makeSocketPayload } from ':utils/socket-utils';
 import { useQueryRoomId } from './use-query-room-id';
 import { SocketEventHandlers, useSocket } from './use-socket';
+import { getCachedPlayer } from ':utils/player-utils';
 
 export type GameSocket = {
   socket: Socket | undefined;
@@ -17,8 +18,7 @@ export type GameSocket = {
 
 export const useGameSocket = (
   gameSlug: GameSlugs,
-  handlers: SocketEventHandlers,
-  player: Player
+  handlers: SocketEventHandlers
 ): GameSocket => {
   const roomId = useQueryRoomId();
   const [roomJoined, setRoomJoined] = useState(false);
@@ -58,6 +58,7 @@ export const useGameSocket = (
 
   useEffect(() => {
     if (socket && connected && !roomJoined) {
+      const player = getCachedPlayer();
       const payload: GameSocketPayload = makeSocketPayload({
         roomId,
         gameSlug,

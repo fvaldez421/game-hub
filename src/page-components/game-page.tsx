@@ -11,11 +11,6 @@ export type GamePageProps = {
   slug: GameSlugs;
 };
 
-const player: Player = {
-  id: 'abcd',
-  username: 'FrankyFrank',
-};
-
 type TicTacToeGameState = {
   turnPlayers: RoomPlayer[]; // player
   gameMap: {}[];
@@ -54,10 +49,6 @@ const useTicTacToeState = () => {
   );
 
   const handleTurnPlayersChange = ({ data }: GameSocketPayload) => {
-    console.log(
-      `Received turn team update: "${CommonGameEvents.RoomTurnTeamUpdate}"`,
-      data
-    );
     setGameState({ ...gameState, turnPlayers: data.turnTeam.players });
   };
 
@@ -79,8 +70,7 @@ export const GamePage = ({ slug }: GamePageProps) => {
   const { gameState, socketHandlers, uiHandlers } = useTicTacToeState();
   const { connected, roomJoined, host, players } = useGameSocket(
     slug,
-    socketHandlers,
-    player
+    socketHandlers
   );
 
   return (
@@ -93,8 +83,12 @@ export const GamePage = ({ slug }: GamePageProps) => {
         <>
           {/* move to common room detail (inside game wrapper) */}
           <p>Room host: {host?.username}</p>
-          <p>Players in room: {players.length}</p>
-
+          <p>Players in room ({players.length}):</p>
+          {players.map((player) => (
+            <p key={player.id}>
+              {player.username}:{player.id}
+            </p>
+          ))}
           <TicTacToe gameState={gameState} uiHandlers={uiHandlers} />
         </>
       ) : (

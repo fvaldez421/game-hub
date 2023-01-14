@@ -9,3 +9,8 @@ export enum CommonGameEvents {
   RoomTurnTeamUpdate = 'room:turn-team-update',
   RoomGameStateUpdate = 'room:game-state-update',
 }
+
+export enum TicTacToeEvents {
+  OnBlockClicked = 'tic-tac-toe:block-clicked',
+  OnMapStateUpdate = 'tic-tac-toe:map-state-update',
+}

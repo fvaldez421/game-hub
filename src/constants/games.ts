@@ -1,3 +1,9 @@
+export enum StorageKeys {
+  GameHubPrefix = 'GAME_HUB:',
+  PlayerIdKey = 'playerId',
+  PlayerUsername = 'playerUsername',
+}
+
 export enum GameSlugs {
   TicTacToe = 'tic-tac-toe',
 }
@@ -10,6 +16,7 @@ export type CommonGameMeta = {
   maxTotalPlayers: number;
   maxPlayerTeams: number;
   showTeamNames: boolean;
+  shouldAutoStartOnFull: boolean;
 };
 
 export const GAMES_META_MAP: { [key in GameSlugs]: CommonGameMeta } = {
@@ -21,6 +28,7 @@ export const GAMES_META_MAP: { [key in GameSlugs]: CommonGameMeta } = {
     maxTotalPlayers: 2,
     maxPlayerTeams: 2,
     showTeamNames: false,
+    shouldAutoStartOnFull: true,
   },
 };
 
