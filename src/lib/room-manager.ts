@@ -1,6 +1,7 @@
 import { Server } from 'socket.io';
 import { GameSlugs } from ':constants/games';
 import { BaseGame } from './base-game';
+import { TicTacToeSession } from './tic-tac-toe';
 
 /**
  * Never use this class directly. Instead use the `roomManager` export
@@ -24,7 +25,7 @@ export class RoomManager {
     gameSlug: GameSlugs
   ): BaseGame {
     // this will be replaced by a mapping of game rooms using gameSlug
-    const room = new BaseGame(io, roomId, gameSlug);
+    const room = new TicTacToeSession(io, roomId);
     this.rooms[roomId] = room;
     return room;
   }

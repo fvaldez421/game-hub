@@ -11,4 +11,5 @@ export type RoomPlayer = {
 export type GameSocketPayload = {
   sentTs: number;
   data: any;
+  [key: string]: any;
 };

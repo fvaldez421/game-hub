@@ -4,15 +4,40 @@ import { GameSocketPayload } from ':types/game-types';
 import { Server } from 'socket.io';
 import { BaseGame } from './base-game';
 
+// this is redundant, already exists in game-page
+type TicTacToeBlock = {
+  x: number;
+  y: number;
+  playerId?: string;
+};
+
+type TicTacToeMap = TicTacToeBlock[][];
+
+const generateDefaultMap = () => {
+  const makeBlock = (x: number, y: number) => ({ x, y });
+  const map: TicTacToeMap = [[], [], []];
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 3; col++) {
+      map[row][col] = makeBlock(col, row);
+    }
+  }
+  return map;
+};
+// end redundant code
+
 export class TicTacToeSession extends BaseGame {
-  private mapState: string[][];
+  private mapState: TicTacToeMap;
 
   constructor(io: Server, roomId: string) {
     super(io, roomId, GameSlugs.TicTacToe);
+
+    // we have to bind handlers here...
+    this.onBlockSelected = this.onBlockSelected.bind(this);
+
+    this.mapState = generateDefaultMap();
     this.socketHandlers = {
-      [TicTacToeEvents.OnBlockClicked]: this.onBlockSelected,
+      [TicTacToeEvents.BlockClicked]: this.onBlockSelected,
     };
-    this.mapState = [[], [], []];
   }
 
   emitMapStateUpdate() {
@@ -21,11 +46,11 @@ export class TicTacToeSession extends BaseGame {
     });
   }
 
-  onBlockSelected({ data }: GameSocketPayload) {
-    const { playerId, block } = data;
-    const { x, y } = block;
+  onBlockSelected({ data, playerId }: GameSocketPayload) {
+    const { x, y } = data;
 
-    this.mapState[y][x] = playerId;
+    this.mapState[x][y] = { ...data, playerId };
     this.emitGameStateUpdate();
+    this.emitMapStateUpdate();
   }
 }

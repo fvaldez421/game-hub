@@ -8,6 +8,7 @@ import {
   uniqueNamesGenerator,
 } from 'unique-names-generator';
 import { Player } from ':types/game-types';
+import { isClient } from './window-utils';
 
 const makePlayerId = () => {
   return `${uuidV4()}-${uuidV4()}`;
@@ -42,7 +43,8 @@ export const getCachedUsername = (): string => {
   return generatedUsername;
 };
 
-export const getCachedPlayer = (): Player => {
+export const getCachedPlayer = (): Player | null => {
+  if (!isClient()) return null;
   return {
     id: getCachedPlayerId(),
     username: getCachedUsername(),

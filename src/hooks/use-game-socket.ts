@@ -13,13 +13,16 @@ export type GameSocket = {
   connected: boolean;
   roomJoined: boolean;
   host: Player | null;
+  player: Player | null;
   players: Player[];
+  emitGameEvent: (event: string, data: any) => void;
 };
 
 export const useGameSocket = (
   gameSlug: GameSlugs,
   handlers: SocketEventHandlers
 ): GameSocket => {
+  const player = getCachedPlayer();
   const roomId = useQueryRoomId();
   const [roomJoined, setRoomJoined] = useState(false);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -56,9 +59,16 @@ export const useGameSocket = (
 
   const { socket, connected } = useSocket(gameEventsConfig);
 
+  const emitGameEvent = (event: string, data: any) => {
+    if (!socket) return;
+    const gameSocketPayload: GameSocketPayload = makeSocketPayload(data, {
+      playerId: player?.id,
+    });
+    socket.emit(event, gameSocketPayload);
+  };
+
   useEffect(() => {
     if (socket && connected && !roomJoined) {
-      const player = getCachedPlayer();
       const payload: GameSocketPayload = makeSocketPayload({
         roomId,
         gameSlug,
@@ -75,6 +85,8 @@ export const useGameSocket = (
     connected,
     roomJoined,
     host,
+    player,
     players,
+    emitGameEvent,
   };
 };

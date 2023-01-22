@@ -11,6 +11,6 @@ export enum CommonGameEvents {
 }
 
 export enum TicTacToeEvents {
-  OnBlockClicked = 'tic-tac-toe:block-clicked',
+  BlockClicked = 'tic-tac-toe:block-clicked',
   OnMapStateUpdate = 'tic-tac-toe:map-state-update',
 }
