@@ -7,14 +7,23 @@ import { combineSocketHandlers, makeSocketPayload } from ':utils/socket-utils';
 import { useQueryRoomId } from './use-query-room-id';
 import { SocketEventHandlers, useSocket } from './use-socket';
 import { getCachedPlayer } from ':utils/player-utils';
+import { PlayerTeam } from ':lib/player-team';
+import { GlobalGameState } from ':lib/base-game';
 
 export type GameSocket = {
   socket: Socket | undefined;
   connected: boolean;
   roomJoined: boolean;
+  globalGameStatus: GlobalGameState;
   host: Player | null;
   player: Player | null;
   players: Player[];
+  playerTeam: PlayerTeam | null;
+  opposingTeams: PlayerTeam[];
+  playerTeams: PlayerTeam[];
+  turnTeam: PlayerTeam | null;
+  nonTurnTeams: PlayerTeam[];
+  turnPlayers: Player[];
   emitGameEvent: (event: string, data: any) => void;
 };
 
@@ -26,7 +35,15 @@ export const useGameSocket = (
   const roomId = useQueryRoomId();
   const [roomJoined, setRoomJoined] = useState(false);
   const [players, setPlayers] = useState<Player[]>([]);
+  const [playerTeam, setPlayerTeam] = useState<PlayerTeam | null>(null);
+  const [playerTeams, setPlayerTeams] = useState<PlayerTeam[]>([]);
+  const [opposingTeams, setOpposingTeams] = useState<PlayerTeam[]>([]);
+  const [turnTeam, setTurnTeam] = useState<PlayerTeam | null>(null);
+  const [nonTurnTeams, setNonTurnTeams] = useState<PlayerTeam[]>([]);
   const [host, setHost] = useState<Player | null>(null);
+  const [globalGameStatus, setGlobalGameStatus] = useState<GlobalGameState>(
+    GlobalGameState.Default
+  );
 
   const onRoomPlayerJoined = ({ data }: GameSocketPayload) => {
     setPlayers(data.players);
@@ -41,8 +58,38 @@ export const useGameSocket = (
     setPlayers(data.players);
   };
 
+  const onRoomTeamsUpdate = ({ data }: GameSocketPayload) => {
+    const allteams: PlayerTeam[] = data.teams || [];
+
+    const playerOpposingTeams: PlayerTeam[] = allteams.filter((team) => {
+      const hasCurrentPlayer = Boolean(team.playersMap[player?.id as string]);
+      if (hasCurrentPlayer) {
+        setPlayerTeam(team);
+      }
+      return !hasCurrentPlayer;
+    });
+    console.log({ allteams, playerOpposingTeams });
+
+    setOpposingTeams(playerOpposingTeams);
+
+    setPlayerTeams(data.teams);
+  };
+
+  const onRoomTurnTeamsUpdate = ({ data }: GameSocketPayload) => {
+    setTurnTeam(data.turnTeam);
+    setNonTurnTeams(data.nonTurnTeams);
+  };
+
+  const onGameStateUpdate = ({ data }: GameSocketPayload) => {
+    setGlobalGameStatus(data.gameState);
+  };
+
   const gameEventsConfig = {
     ...handlers,
+    [CommonGameEvents.RoomGameStateUpdate]: combineSocketHandlers(
+      onGameStateUpdate,
+      handlers[CommonGameEvents.RoomGameStateUpdate]
+    ),
     [CommonGameEvents.RoomMetadataUpdate]: combineSocketHandlers(
       onRoomMetadataUpdate,
       handlers[CommonGameEvents.RoomMetadataUpdate]
@@ -54,6 +101,14 @@ export const useGameSocket = (
     [CommonGameEvents.RoomPlayerJoined]: combineSocketHandlers(
       onRoomPlayerJoined,
       handlers[CommonGameEvents.RoomPlayerJoined]
+    ),
+    [CommonGameEvents.RoomTeamsUpdated]: combineSocketHandlers(
+      onRoomTeamsUpdate,
+      handlers[CommonGameEvents.RoomTeamsUpdated]
+    ),
+    [CommonGameEvents.RoomTurnTeamUpdate]: combineSocketHandlers(
+      onRoomTurnTeamsUpdate,
+      handlers[CommonGameEvents.RoomTurnTeamUpdate]
     ),
   };
 
@@ -84,9 +139,16 @@ export const useGameSocket = (
     socket,
     connected,
     roomJoined,
+    globalGameStatus,
     host,
     player,
     players,
+    playerTeam,
+    opposingTeams,
+    playerTeams,
+    turnTeam,
+    nonTurnTeams,
+    turnPlayers: turnTeam?.players || [],
     emitGameEvent,
   };
 };

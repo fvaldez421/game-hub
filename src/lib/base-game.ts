@@ -1,7 +1,7 @@
 import { Server } from 'socket.io';
 import { GameSlugs } from ':constants/games';
 import { BaseRoom } from './base-room';
-import { RoomPlayer } from ':types/game-types';
+import { GamePlayer, RoomPlayer } from ':types/game-types';
 import { getGameMetaData } from ':utils/games-utils';
 import { CommonGameEvents } from ':constants/game-events';
 import { PlayerTeam } from './player-team';
@@ -23,7 +23,7 @@ export class BaseGame extends BaseRoom {
 
   private maxTeamPlayers: number;
 
-  private playerTeams: PlayerTeam[];
+  protected playerTeams: PlayerTeam[];
 
   protected teamsTurnOrder: string[];
 
@@ -49,10 +49,10 @@ export class BaseGame extends BaseRoom {
 
     // we have to init with default teams. There's ALWAYS at least one team...
     this.playerTeams = [];
-    const initialTeams = this.createInitialTeams(gameConfig.initialTeamsCount);
-    this.playerTeams = [...initialTeams];
-    this.turnTeam = initialTeams[0];
-    this.teamsTurnOrder = initialTeams.map((team) => team.id);
+    this.playerTeams = [];
+    this.createInitialTeams(gameConfig.initialTeamsCount);
+    this.turnTeam = this.playerTeams[0];
+    this.teamsTurnOrder = this.playerTeams.map((team) => team.id);
     this.turnTeamIndex = 0;
     this.globalGameState = GlobalGameState.Default;
     this.emitGameStateUpdate();
@@ -62,6 +62,12 @@ export class BaseGame extends BaseRoom {
 
   get currentTurnTeam() {
     return this.turnTeam;
+  }
+
+  get nonTurnTeams() {
+    return this.playerTeams.filter(
+      (team) => team.id !== this.currentTurnTeam.id
+    );
   }
 
   get currentTeamPlayers() {
@@ -153,21 +159,25 @@ export class BaseGame extends BaseRoom {
     return team;
   }
 
-  protected createNewPlayerTeam(teamName?: string) {
-    return new PlayerTeam(
+  protected createNewPlayerTeam(defaultTeamName?: string) {
+    const teamName = this.makeNewTeamName(defaultTeamName);
+
+    const team = new PlayerTeam(
       this.maxTeamPlayers,
       this.playerTeams.length,
       teamName
     );
+
+    this.onTeamCreated(team);
+
+    return team;
   }
 
   protected createInitialTeams(initialTeamsCount: number) {
-    const initialTeams = [];
     while (initialTeamsCount) {
-      initialTeams.push(this.createNewPlayerTeam());
+      this.playerTeams.push(this.createNewPlayerTeam());
       initialTeamsCount--;
     }
-    return initialTeams;
   }
 
   protected getSmallestTeam(): PlayerTeam {
@@ -197,14 +207,16 @@ export class BaseGame extends BaseRoom {
 
   private emitTeamsUpdate() {
     this.emitGameEvent(CommonGameEvents.RoomTeamsUpdated, {
-      teams: this.playerTeams,
+      teams: this.playerTeams.map((team) => team.toJSON()),
       showTeamNames: this.showTeamNames,
     });
   }
 
   private emitTurnTeamUpdate() {
     this.emitGameEvent(CommonGameEvents.RoomTurnTeamUpdate, {
-      turnTeam: { ...this.turnTeam, players: this.turnTeam.players },
+      // we have to use this.turnTeam.players bc its a getter...
+      turnTeam: this.turnTeam.toJSON(),
+      nonTurnTeams: this.nonTurnTeams.map((team) => team.toJSON()),
     });
   }
 
@@ -214,8 +226,12 @@ export class BaseGame extends BaseRoom {
     });
   }
 
-  protected onPlayerJoined(player: RoomPlayer): void {
+  protected onPlayerJoined(player: GamePlayer): void {
     const smallestTeam = this.getSmallestTeam();
+
+    player.teamId = smallestTeam.id;
+    player.teamName = smallestTeam.name;
+
     smallestTeam.addPlayer(player);
 
     this.emitTeamsUpdate();
@@ -229,6 +245,8 @@ export class BaseGame extends BaseRoom {
       console.log(`Game room is full, starting game.`);
       this.startGame();
     }
+
+    this.onGamePlayerJoined(player);
   }
 
   private getNextTurnTeamIndex() {
@@ -246,18 +264,26 @@ export class BaseGame extends BaseRoom {
     ) as PlayerTeam;
   }
 
-  private setNextTurnTeam() {
+  protected setNextTurnTeam() {
     const nextTeamIndex = this.getNextTurnTeamIndex();
     const nextTeam = this.getTurnTeamByIndex(nextTeamIndex);
+    const prevTeam = this.currentTurnTeam;
+
     // we want to set all the new values in the same fn, this prevents inconsistent state
     this.turnTeamIndex = nextTeamIndex;
     this.turnTeam = nextTeam;
     this.emitTeamsUpdate();
-    this.onTeamsUpdated();
+    this.onTeamTurnsUpdated(prevTeam, nextTeam);
   }
 
   // util for child classes
-  protected onTeamsUpdated() {}
+  protected onTeamTurnsUpdated(prevTeam: PlayerTeam, nextTeam: PlayerTeam) {}
+  protected onTeamCreated(playerTeam: PlayerTeam) {}
+  /** This method should be used to set team names if necessary */
+  protected makeNewTeamName(defaultTeamName: string = ''): string {
+    return defaultTeamName;
+  }
+  protected onGamePlayerJoined(player: RoomPlayer) {}
   protected onGameReady() {}
   protected onGameStart() {}
   protected onGamePause() {}

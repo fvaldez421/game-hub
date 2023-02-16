@@ -40,6 +40,10 @@ export class TicTacToeSession extends BaseGame {
     };
   }
 
+  protected makeNewTeamName(): string {
+    return this.playerTeams.length === 0 ? 'X' : 'O';
+  }
+
   emitMapStateUpdate() {
     this.emitGameEvent(TicTacToeEvents.OnMapStateUpdate, {
       mapState: this.mapState,
@@ -49,8 +53,9 @@ export class TicTacToeSession extends BaseGame {
   onBlockSelected({ data, playerId }: GameSocketPayload) {
     const { x, y } = data;
 
-    this.mapState[x][y] = { ...data, playerId };
+    this.mapState[y][x] = { ...data, playerId };
     this.emitGameStateUpdate();
     this.emitMapStateUpdate();
+    // this.setNextTurnTeam();
   }
 }

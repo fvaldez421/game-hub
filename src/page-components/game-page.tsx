@@ -6,6 +6,7 @@ import { getGameMetaData } from ':utils/games-utils';
 import { useGameSocket } from ':hooks/use-game-socket';
 import { Loader } from ':components/loader';
 import { PageMeta } from ':components/page-meta';
+import { GlobalGameState } from ':lib/base-game';
 
 export type GamePageProps = {
   slug: GameSlugs;
@@ -20,7 +21,8 @@ type TicTacToeBlock = {
 type TicTacToeMap = TicTacToeBlock[][];
 
 type TicTacToeGameState = {
-  turnPlayers: RoomPlayer[]; // player
+  turnPlayer: Player | null; // player
+  opposingPlayer: Player | null;
   gameMap: TicTacToeMap;
   winner: RoomPlayer | null; // player
   loser: RoomPlayer | null; // player
@@ -31,6 +33,7 @@ type UiHandlers = {
 };
 
 type GameComponentProps<GameState, UiHandlers> = {
+  roomData: ReturnType<typeof useTicTacToeState>['roomData'];
   gameState: GameState;
   uiHandlers: UiHandlers;
 };
@@ -38,38 +41,41 @@ type GameComponentProps<GameState, UiHandlers> = {
 const generateDefaultMap = () => {
   const makeBlock = (x: number, y: number) => ({ x, y });
   const map: TicTacToeMap = [[], [], []];
-  for (let row = 0; row < 3; row++) {
-    for (let col = 0; col < 3; col++) {
-      map[row][col] = makeBlock(col, row);
+  for (let y = 0; y < 3; y++) {
+    for (let x = 0; x < 3; x++) {
+      map[y][x] = makeBlock(x, y);
     }
   }
   return map;
 };
 
-const ticTacToeDefaultState = {
-  turnPlayers: [],
+const ticTacToeDefaultState: TicTacToeGameState = {
+  turnPlayer: null,
+  opposingPlayer: null,
   gameMap: generateDefaultMap(),
   winner: null,
   loser: null,
 };
 
-const updateGameMap = (gameMap: TicTacToeMap, block: TicTacToeBlock) => {
-  const { x, y } = block;
-  gameMap[y] = [...gameMap[y]];
-  gameMap[y][x] = block;
-  // clone
-  return JSON.parse(JSON.stringify(gameMap));
-};
-
 const TicTacToe = ({
+  roomData,
   gameState,
   uiHandlers,
 }: GameComponentProps<TicTacToeGameState, UiHandlers>) => {
   const { [TicTacToeEvents.BlockClicked]: onBlockClicked } = uiHandlers;
+  const { turnPlayer, opposingPlayer } = gameState;
+
+  const handleBlockClicked = (block: TicTacToeBlock) => {
+    if (roomData.globalGameStatus !== GlobalGameState.InProgress) {
+      console.log(roomData.globalGameStatus);
+      return;
+    }
+    onBlockClicked({ x: block.x, y: block.y });
+  };
 
   return (
     <div>
-      <p>Player Turn: {gameState.turnPlayers[0]?.username}</p>
+      <p>Player Turn: {turnPlayer?.username}</p>
       <div id="map-container"></div>
       {gameState.gameMap.map((row, i) => (
         <div
@@ -82,13 +88,17 @@ const TicTacToe = ({
               key={`col-${i}`}
               id={`col-${i}`}
               style={{
-                width: '100px',
-                height: '100px',
+                width: '200px',
+                height: '200px',
                 border: '1px solid black',
               }}
-              onClick={() => onBlockClicked({ x: col.x, y: col.y })}
+              onClick={() => handleBlockClicked(col)}
             >
               {col.x}, {col.y}
+              {col.playerId === roomData.player?.id &&
+                roomData.playerTeam?.name}
+              {col.playerId === (opposingPlayer?.id || 'not found') &&
+                roomData.opposingTeams?.[0]?.name}
             </div>
           ))}
         </div>
@@ -102,12 +112,7 @@ const useTicTacToeState = () => {
     ticTacToeDefaultState
   );
 
-  const handleTurnPlayersChange = ({ data }: GameSocketPayload) => {
-    setGameState({ ...gameState, turnPlayers: data.turnTeam.players });
-  };
-
   const handleMapUpdate = ({ data }: GameSocketPayload) => {
-    console.log('map update:', data.mapState);
     setGameState({
       ...gameState,
       gameMap: data.mapState,
@@ -115,7 +120,6 @@ const useTicTacToeState = () => {
   };
 
   const socketHandlers = {
-    [CommonGameEvents.RoomTurnTeamUpdate]: handleTurnPlayersChange,
     [TicTacToeEvents.OnMapStateUpdate]: handleMapUpdate,
   };
 
@@ -132,9 +136,14 @@ const useTicTacToeState = () => {
     [TicTacToeEvents.BlockClicked]: handleUiBlockClicked,
   };
 
+  console.log({ opposingTeams: roomData.opposingTeams });
   return {
     roomData,
-    gameState,
+    gameState: {
+      ...gameState,
+      turnPlayer: roomData.turnPlayers[0],
+      opposingPlayer: roomData.opposingTeams[0]?.players?.[0] || null,
+    },
     uiHandlers,
   };
 };
@@ -142,7 +151,7 @@ const useTicTacToeState = () => {
 export const GamePage = ({ slug }: GamePageProps) => {
   const { name, description } = getGameMetaData(slug);
   const { gameState, uiHandlers, roomData } = useTicTacToeState();
-  const { connected, roomJoined, host, player, players } = roomData;
+  const { connected, roomJoined, host, player, playerTeam, players } = roomData;
   return (
     <div>
       <PageMeta title={`Game Hub - ${name}`} description={description} />
@@ -160,7 +169,11 @@ export const GamePage = ({ slug }: GamePageProps) => {
               {player.username}:{player.id}
             </p>
           ))}
-          <TicTacToe gameState={gameState} uiHandlers={uiHandlers} />
+          <TicTacToe
+            roomData={roomData}
+            gameState={gameState}
+            uiHandlers={uiHandlers}
+          />
         </>
       ) : (
         <p>Joining room...</p>

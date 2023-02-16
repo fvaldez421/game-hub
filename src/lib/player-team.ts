@@ -8,7 +8,7 @@ export class PlayerTeam {
 
   public name: string;
 
-  private playersMap: Record<string, RoomPlayer>;
+  public playersMap: Record<string, RoomPlayer>;
 
   constructor(capacity: number, existingTeamsCount: number, name?: string) {
     this.id = uuidV4();
@@ -39,5 +39,12 @@ export class PlayerTeam {
 
     this.playersMap[player.id] = player;
     return true;
+  }
+
+  toJSON() {
+    return {
+      ...this,
+      players: this.players,
+    };
   }
 }

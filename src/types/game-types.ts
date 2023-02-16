@@ -8,6 +8,11 @@ export type RoomPlayer = {
   joinedTS: number;
 } & Player;
 
+export type GamePlayer = {
+  teamId: string;
+  teamName: string;
+} & RoomPlayer;
+
 export type GameSocketPayload = {
   sentTs: number;
   data: any;

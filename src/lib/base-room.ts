@@ -151,13 +151,13 @@ export class BaseRoom {
 
     // add player to players - will make this.isEmpty false
     this.playersMap[player.id] = roomPlayer;
+    this.onPlayerJoined(roomPlayer);
     this.emitPlayerJoined(roomPlayer);
 
     // if room was empty prior to current player joining
     if (wasEmpty) {
       this.handleHostAssigned(roomPlayer);
     }
-    this.onPlayerJoined(roomPlayer);
   }
 
   private addSocketToRoom(socket: Socket) {
